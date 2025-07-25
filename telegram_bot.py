@@ -1,4 +1,10 @@
-# ... [existing imports stay the same] ...
+import os
+import json
+import uuid
+import asyncio
+import threading
+import logging
+from functools import wraps
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (ApplicationBuilder, CommandHandler, MessageHandler,
                           filters, CallbackQueryHandler, ContextTypes)
@@ -100,22 +106,11 @@ async def cancelsetchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("ℹ️ No channel setup in progress.")
 
-# --- NEW: clearsetchannels ---
 @admin_only
 async def clearsetchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data["required_channels"] = []
     save_data()
-    await update.message.reply_text("✅ All required channels have been cleared.")  # NEW
-
-# --- NEW: viewchannels ---
-@admin_only
-async def viewchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    channels = data.get("required_channels", [])
-    if not channels:
-        await update.message.reply_text("ℹ️ No required channels are currently set.")
-    else:
-        channel_list = "\n".join(f"• {c['chat_id']}" for c in channels)
-        await update.message.reply_text(f"📋 Required channels:\n{channel_list}")  # NEW
+    await update.message.reply_text("✅ Required channel list has been cleared.")
 
 @admin_only
 async def setbutton(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -141,8 +136,7 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/batchoff - Cancel batch",
         "/setchannels - Set required channels",
         "/cancelsetchannels - Cancel channel setup",
-        "/clearsetchannels - Clear all required channels",  # NEW
-        "/viewchannels - View current required channels",   # NEW
+        "/clearsetchannels - Clear required channel list",
         "/setbutton - Set button text and link",
         "/cancelsetbutton - Cancel button setup",
         "/promotext - Set or clear promo message",
@@ -168,13 +162,144 @@ async def promotext(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ Promo text set to:\n\n{text}")
 
 # --- Message Input Handler (Admin Only) ---
-# [unchanged section below here]
+async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ You are not authorized to use this bot.")
+        return
+
+    if context.user_data.get("awaiting_channels"):
+        usernames = update.message.text.splitlines()
+        data["required_channels"] = []
+        for u in usernames:
+            u = u.strip()
+            if u.startswith("@"):  # valid channel username
+                data["required_channels"].append({
+                    "chat_id": u,
+                    "url": f"https://t.me/{u[1:]}"
+                })
+        save_data()
+        context.user_data["awaiting_channels"] = False
+        await update.message.reply_text("✅ Required channels updated.")
+        return
+
+    if context.user_data.get("awaiting_button_text"):
+        context.user_data["new_button_text"] = update.message.text.strip()
+        await update.message.reply_text("🔗 Now send the new button URL:")
+        context.user_data.pop("awaiting_button_text")
+        context.user_data["awaiting_button_url"] = True
+        return
+
+    if context.user_data.get("awaiting_button_url"):
+        url = update.message.text.strip()
+        text = context.user_data.pop("new_button_text")
+        data["button_text"] = text
+        data["button_url"] = url
+        save_data()
+        context.user_data.pop("awaiting_button_url")
+        await update.message.reply_text(f"✅ Button updated to: [{text}]({url})", parse_mode="Markdown")
+        return
+
+    if str(ADMIN_ID) in data["batch_sessions"]:
+        msg_id = update.message.message_id
+        data["batch_sessions"][str(ADMIN_ID)].append(msg_id)
+        save_data()
+        return
+
+    token = generate_token()
+    data["single_inputs"][token] = {"type": "single", "message_id": update.message.message_id}
+    save_data()
+    await update.message.reply_text(f"🔗 Link generated: https://t.me/{context.bot.username}?start={token}")
 
 # --- Token-based Delivery (/start <token>) ---
-# [unchanged section here too]
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if not args:
+        await update.message.reply_text("👋 Welcome!")
+        return
+
+    token = args[0]
+    if token not in data["single_inputs"]:
+        await update.message.reply_text("❌ Invalid or expired link.")
+        return
+
+    if data["required_channels"] and not await is_user_joined(update.effective_user.id, context):
+        buttons = [[InlineKeyboardButton("Join", url=ch["url"])] for ch in data["required_channels"]]
+        buttons.append([InlineKeyboardButton("✅ Try Again", callback_data=f"tryagain|{token}")])
+        await update.message.reply_text(
+            "📢 Please join all required channels:",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+        return
+
+    record = data["single_inputs"][token]
+    sent_ids = []
+
+    if record["type"] == "single":
+        copied = await context.bot.copy_message(update.effective_chat.id, ADMIN_ID, record["message_id"])
+        sent_ids.append(copied.message_id)
+    else:
+        for msg_id in record["messages"]:
+            copied = await context.bot.copy_message(update.effective_chat.id, ADMIN_ID, msg_id)
+            sent_ids.append(copied.message_id)
+
+    if data.get("promo_text"):
+        promo = await update.message.reply_text(data["promo_text"])
+        sent_ids.append(promo.message_id)
+
+    footer = await update.message.reply_text(
+        "This will be auto-deleted after 30 min",
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
+        )
+    )
+    sent_ids.append(footer.message_id)
+
+    threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
 
 # --- Callback Handler for "✅ Try Again" Button ---
-# [unchanged section here too]
+async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    _, token = query.data.split("|")
+    user_id = query.from_user.id
+    chat_id = query.message.chat.id
+
+    if data["required_channels"] and not await is_user_joined(user_id, context):
+        await query.answer("❌ You haven't joined all required channels.", show_alert=True)
+        return
+
+    record = data["single_inputs"].get(token)
+    if not record:
+        await query.message.reply_text("❌ Invalid or expired link.")
+        await query.answer()
+        return
+
+    sent_ids = []
+
+    if record["type"] == "single":
+        copied = await context.bot.copy_message(chat_id, ADMIN_ID, record["message_id"])
+        sent_ids.append(copied.message_id)
+    else:
+        for msg_id in record["messages"]:
+            copied = await context.bot.copy_message(chat_id, ADMIN_ID, msg_id)
+            sent_ids.append(copied.message_id)
+
+    if data.get("promo_text"):
+        promo = await context.bot.send_message(chat_id, data["promo_text"])
+        sent_ids.append(promo.message_id)
+
+    footer = await context.bot.send_message(
+        chat_id,
+        "This will be auto-deleted after 30 min",
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
+        )
+    )
+    sent_ids.append(footer.message_id)
+
+    threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, chat_id, sent_ids))).start()
+    await query.answer()
+    await query.message.delete()
 
 # --- Fallback for unknown commands ---
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -189,8 +314,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("generatebatch", generatebatch))
     app.add_handler(CommandHandler("setchannels", setchannels))
     app.add_handler(CommandHandler("cancelsetchannels", cancelsetchannels))
-    app.add_handler(CommandHandler("clearsetchannels", clearsetchannels))  # NEW
-    app.add_handler(CommandHandler("viewchannels", viewchannels))          # NEW
+    app.add_handler(CommandHandler("clearsetchannels", clearsetchannels))
     app.add_handler(CommandHandler("setbutton", setbutton))
     app.add_handler(CommandHandler("cancelsetbutton", cancelsetbutton))
     app.add_handler(CommandHandler("promotext", promotext))
