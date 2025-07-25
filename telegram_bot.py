@@ -98,9 +98,28 @@ async def setchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["awaiting_channels"] = True
 
 @admin_only
+async def cancelsetchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get("awaiting_channels"):
+        context.user_data["awaiting_channels"] = False
+        await update.message.reply_text("❌ Channel setup cancelled.")
+    else:
+        await update.message.reply_text("ℹ️ No channel setup in progress.")
+
+@admin_only
 async def setbutton(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📝 Send the new button text:")
     context.user_data["awaiting_button_text"] = True
+
+@admin_only
+async def cancelsetbutton(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    changed = False
+    for key in ["awaiting_button_text", "awaiting_button_url", "new_button_text"]:
+        if context.user_data.pop(key, None) is not None:
+            changed = True
+    if changed:
+        await update.message.reply_text("❌ Button setup cancelled.")
+    else:
+        await update.message.reply_text("ℹ️ No button setup in progress.")
 
 @admin_only
 async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -109,7 +128,9 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/generatebatch - Generate batch link",
         "/batchoff - Cancel batch",
         "/setchannels - Set required channels",
+        "/cancelsetchannels - Cancel channel setup",
         "/setbutton - Set button text and link",
+        "/cancelsetbutton - Cancel button setup",
         "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
@@ -258,7 +279,9 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("batchoff", batchoff))
     app.add_handler(CommandHandler("generatebatch", generatebatch))
     app.add_handler(CommandHandler("setchannels", setchannels))
+    app.add_handler(CommandHandler("cancelsetchannels", cancelsetchannels))
     app.add_handler(CommandHandler("setbutton", setbutton))
+    app.add_handler(CommandHandler("cancelsetbutton", cancelsetbutton))
     app.add_handler(CommandHandler("allcommands", allcommands))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(tryagain_callback, pattern=r"^tryagain|"))
