@@ -145,15 +145,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Invalid or expired link.")
         return
 
-    if data["required_channels"]:
-        if not is_user_joined(update.effective_user.id, context):
-            buttons = [[InlineKeyboardButton("Join", url=ch)] for ch in data["required_channels"]]
-            buttons.append([InlineKeyboardButton("✅ Try Again", callback_data=f"tryagain|{token}")])
-            await update.message.reply_text(
-                "📢 Please join all required channels:",
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
-            return
+    if data["required_channels"] and not is_user_joined(update.effective_user.id, context):
+        buttons = [[InlineKeyboardButton("Join", url=ch)] for ch in data["required_channels"]]
+        buttons.append([InlineKeyboardButton("✅ Try Again", callback_data=f"tryagain|{token}")])
+        await update.message.reply_text(
+            "📢 Please join all required channels:",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+        return
 
     record = data["single_inputs"][token]
     sent_ids = []
@@ -180,8 +179,41 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     _, token = query.data.split("|")
-    await start(update, context)
+    user_id = query.from_user.id
+    chat_id = query.message.chat.id
+
+    if data["required_channels"] and not is_user_joined(user_id, context):
+        await query.answer("❌ You haven't joined all required channels.", show_alert=True)
+        return
+
+    record = data["single_inputs"].get(token)
+    if not record:
+        await query.message.reply_text("❌ Invalid or expired link.")
+        await query.answer()
+        return
+
+    sent_ids = []
+
+    if record["type"] == "single":
+        msg = await context.bot.send_message(chat_id, record["message"].get("text", ""))
+        sent_ids.append(msg.message_id)
+    else:
+        for msg_data in record["messages"]:
+            msg = await context.bot.send_message(chat_id, msg_data.get("text", ""))
+            sent_ids.append(msg.message_id)
+
+    footer = await context.bot.send_message(
+        chat_id,
+        "This will be auto-deleted after 30 min",
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Open", url="https://example.com")]]
+        )
+    )
+    sent_ids.append(footer.message_id)
+
+    threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, chat_id, sent_ids))).start()
     await query.answer()
+    await query.message.delete()
 
 # --- Fallback for unknown commands ---
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
