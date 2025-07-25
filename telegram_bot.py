@@ -103,6 +103,35 @@ async def setbutton(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["awaiting_button_text"] = True
 
 @admin_only
+async def listlinks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not data["single_inputs"]:
+        await update.message.reply_text("🔍 No links generated yet.")
+        return
+    lines = []
+    for token, info in data["single_inputs"].items():
+        lines.append(f"🔗 [{token} - {info['type']}](https://t.me/{context.bot.username}?start={token})")
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+@admin_only
+async def deletelink(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("❗ Usage: /deletelink <token>")
+        return
+    token = context.args[0]
+    if token in data["single_inputs"]:
+        data["single_inputs"].pop(token)
+        save_data()
+        await update.message.reply_text(f"✅ Link `{token}` deleted.", parse_mode="Markdown")
+    else:
+        await update.message.reply_text("❌ Token not found.")
+
+@admin_only
+async def deletealllinks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data["single_inputs"].clear()
+    save_data()
+    await update.message.reply_text("⚠️ All links deleted.")
+
+@admin_only
 async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cmds = [
         "/batch - Start batch mode",
@@ -110,6 +139,9 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/batchoff - Cancel batch",
         "/setchannels - Set required channels",
         "/setbutton - Set button text and link",
+        "/listlinks - Show all generated links",
+        "/deletelink <token> - Delete a specific link",
+        "/deletealllinks - Delete all generated links",
         "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
@@ -259,6 +291,9 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("generatebatch", generatebatch))
     app.add_handler(CommandHandler("setchannels", setchannels))
     app.add_handler(CommandHandler("setbutton", setbutton))
+    app.add_handler(CommandHandler("listlinks", listlinks))
+    app.add_handler(CommandHandler("deletelink", deletelink))
+    app.add_handler(CommandHandler("deletealllinks", deletealllinks))
     app.add_handler(CommandHandler("allcommands", allcommands))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(tryagain_callback, pattern=r"^tryagain|"))
