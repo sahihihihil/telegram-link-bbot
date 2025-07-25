@@ -307,7 +307,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sent_ids.append(promo.message_id)
 
     button_msg = await update.message.reply_text(
-        "",
+        "🔘 Tap below to continue:",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
@@ -352,7 +352,7 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     button_msg = await context.bot.send_message(
         chat_id,
-        "",
+        "🔘 Tap below to continue:",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
