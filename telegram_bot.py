@@ -98,12 +98,6 @@ async def setchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["awaiting_channels"] = True
 
 @admin_only
-async def removesetchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    data["required_channels"] = []
-    save_data()
-    await update.message.reply_text("❌ Required channels have been removed.")
-
-@admin_only
 async def setbutton(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📝 Send the new button text:")
     context.user_data["awaiting_button_text"] = True
@@ -115,7 +109,6 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/generatebatch - Generate batch link",
         "/batchoff - Cancel batch",
         "/setchannels - Set required channels",
-        "/removesetchannels - Remove required channels",
         "/setbutton - Set button text and link",
         "/allcommands - Show all commands"
     ]
@@ -265,7 +258,6 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("batchoff", batchoff))
     app.add_handler(CommandHandler("generatebatch", generatebatch))
     app.add_handler(CommandHandler("setchannels", setchannels))
-    app.add_handler(CommandHandler("removesetchannels", removesetchannels))
     app.add_handler(CommandHandler("setbutton", setbutton))
     app.add_handler(CommandHandler("allcommands", allcommands))
     app.add_handler(CommandHandler("start", start))
