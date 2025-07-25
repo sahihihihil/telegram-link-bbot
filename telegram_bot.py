@@ -140,11 +140,10 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/setbutton - Set button text and link",
         "/cancelsetbutton - Cancel button setup",
         "/promotext - Set or clear promo message",
-        
-    "/listlinks - List all generated links",
-    "/deletelink <token> - Delete a specific link",
-    "/deletealllinks - Delete all links",
-    "/allcommands - Show all commands"
+        "/listlinks - List all active links",
+        "/deletelink <token> - Delete a specific link",
+        "/deletealllinks - Delete all links",
+        "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
 
@@ -165,18 +164,18 @@ async def promotext(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_data()
         await update.message.reply_text(f"✅ Promo text set to:\n\n{text}")
 
-
 @admin_only
 async def listlinks(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not data["single_inputs"]:
-        await update.message.reply_text("ℹ️ No links found.")
-        return
+    messages = []
+    if data["single_inputs"]:
+        messages.append("🔗 *Single Links:*")
+        for token, record in data["single_inputs"].items():
+            type_label = "Batch" if record.get("type") == "batch" else "Single"
+            messages.append(f"- `{token}` ({type_label})")
+    else:
+        messages.append("ℹ️ No single or batch links found.")
 
-    msg_lines = ["🔗 Active Links:"]
-    for token, info in data["single_inputs"].items():
-        msg_lines.append(f"• `{token}` – {info['type']}")
-
-    await update.message.reply_text("\n".join(msg_lines), parse_mode="Markdown")
+    await update.message.reply_text("\n".join(messages), parse_mode="Markdown")
 
 @admin_only
 async def deletelink(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -185,29 +184,23 @@ async def deletelink(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Usage: /deletelink <token>")
         return
 
-    token = args[0].strip()
+    token = args[0]
     if token in data["single_inputs"]:
-        data["single_inputs"].pop(token)
+        del data["single_inputs"][token]
         save_data()
         await update.message.reply_text(f"✅ Link `{token}` deleted.", parse_mode="Markdown")
     else:
-        await update.message.reply_text(f"❌ Token `{token}` not found.", parse_mode="Markdown")
+        await update.message.reply_text("❌ Token not found.")
 
 @admin_only
 async def deletealllinks(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    if args and args[0].lower() == "confirm":
-        data["single_inputs"] = {}
-        save_data()
-        await update.message.reply_text("✅ All links deleted.")
-    else:
-        await update.message.reply_text("⚠️ This will delete *all* links. Use `/deletealllinks confirm` to proceed.", parse_mode="Markdown")
+    data["single_inputs"].clear()
+    data["batch_sessions"].clear()
+    save_data()
+    await update.message.reply_text("🗑️ All links (single & batch) have been deleted.")
 
 # --- Message Input Handler (Admin Only) ---
 async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.text and update.message.text.startswith("/"):
-        return  # Ignore commands, let CommandHandler handle them
-
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         await update.message.reply_text("❌ You are not authorized to use this bot.")
@@ -254,7 +247,7 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     token = generate_token()
     data["single_inputs"][token] = {"type": "single", "message_id": update.message.message_id}
     save_data()
-    await update.message.reply_text(f"🔗 Link generated: https://t.me/{context.bot.username}?start={token}")
+    await update.message.reply_text(f"🖓 Link generated: https://t.me/{context.bot.username}?start={token}")
 
 # --- Token-based Delivery (/start <token>) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -363,15 +356,13 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("setbutton", setbutton))
     app.add_handler(CommandHandler("cancelsetbutton", cancelsetbutton))
     app.add_handler(CommandHandler("promotext", promotext))
-    app.add_handler(CommandHandler("allcommands", allcommands))
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(tryagain_callback, pattern=r"^tryagain|"))
-    app.add_handler(MessageHandler(~filters.COMMAND, handle_input))
-    app.add_handler(MessageHandler(filters.COMMAND, fallback))
-
-    
     app.add_handler(CommandHandler("listlinks", listlinks))
     app.add_handler(CommandHandler("deletelink", deletelink))
     app.add_handler(CommandHandler("deletealllinks", deletealllinks))
+    app.add_handler(CommandHandler("allcommands", allcommands))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(tryagain_callback, pattern=r"^tryagain|"))
+    app.add_handler(MessageHandler(filters.ALL, handle_input))
+    app.add_handler(MessageHandler(filters.COMMAND, fallback))
 
-app.run_polling(drop_pending_updates=True)
+    app.run_polling(drop_pending_updates=True)
