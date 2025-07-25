@@ -228,9 +228,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             copied = await context.bot.copy_message(update.effective_chat.id, ADMIN_ID, msg_id)
             sent_ids.append(copied.message_id)
 
+    promo_msg = await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=data.get("promo_text") or ""
+    )
+    sent_ids.append(promo_msg.message_id)
+
     button_msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text=data.get("promo_text") or "🔘 Access Link:",
+        text="",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
@@ -275,7 +281,6 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     button_msg = await context.bot.send_message(
         chat_id,
-        data.get("promo_text") or "🔘 Access Link:",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
