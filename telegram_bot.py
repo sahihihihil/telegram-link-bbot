@@ -49,9 +49,8 @@ def generate_token():
 
 def is_user_joined(user_id, context):
     for ch in data["required_channels"]:
-        chat_id = ch.split("/")[-1]
         try:
-            member = context.bot.get_chat_member(chat_id, user_id)
+            member = context.bot.get_chat_member(ch["chat_id"], user_id)
             if member.status not in ["member", "administrator", "creator"]:
                 return False
         except:
@@ -93,7 +92,7 @@ async def generatebatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @admin_only
 async def setchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📥 Send channel links (one per line):")
+    await update.message.reply_text("📥 Send @channel usernames (one per line):")
     context.user_data["awaiting_channels"] = True
 
 @admin_only
@@ -115,8 +114,15 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if context.user_data.get("awaiting_channels"):
-        links = update.message.text.splitlines()
-        data["required_channels"] = [link.strip() for link in links if link.strip()]
+        usernames = update.message.text.splitlines()
+        data["required_channels"] = []
+        for u in usernames:
+            u = u.strip()
+            if u.startswith("@"):  # valid channel username
+                data["required_channels"].append({
+                    "chat_id": u,
+                    "url": f"https://t.me/{u[1:]}"
+                })
         save_data()
         context.user_data["awaiting_channels"] = False
         await update.message.reply_text("✅ Required channels updated.")
@@ -146,7 +152,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data["required_channels"] and not is_user_joined(update.effective_user.id, context):
-        buttons = [[InlineKeyboardButton("Join", url=ch)] for ch in data["required_channels"]]
+        buttons = [[InlineKeyboardButton("Join", url=ch["url"])] for ch in data["required_channels"]]
         buttons.append([InlineKeyboardButton("✅ Try Again", callback_data=f"tryagain|{token}")])
         await update.message.reply_text(
             "📢 Please join all required channels:",
