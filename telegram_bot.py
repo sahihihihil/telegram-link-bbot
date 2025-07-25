@@ -5,8 +5,10 @@ import asyncio
 import logging
 from functools import wraps
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import (ApplicationBuilder, CommandHandler, MessageHandler,
-                          filters, CallbackQueryHandler, ContextTypes)
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler,
+    filters, CallbackQueryHandler, ContextTypes
+)
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
@@ -66,7 +68,7 @@ async def schedule_deletion(context: ContextTypes.DEFAULT_TYPE, chat_id, message
         except:
             pass
 
-# --- Command Handlers ---
+# --- Admin Commands ---
 @admin_only
 async def batch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data["batch_sessions"][str(ADMIN_ID)] = []
@@ -89,7 +91,7 @@ async def generatebatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data["single_inputs"][token] = {"type": "batch", "messages": session}
     data["batch_sessions"].pop(str(ADMIN_ID), None)
     save_data()
-    await update.message.reply_text(f"✅ Batch link generated: https://t.me/{context.bot.username}?start={token}")
+    await update.message.reply_text(f"✅ Batch link: https://t.me/{context.bot.username}?start={token}")
 
 @admin_only
 async def setchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -102,7 +104,7 @@ async def cancelsetchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
         data["required_channels"] = []
         save_data()
-        await update.message.reply_text("❌ Channel setup cancelled and all required channels removed.")
+        await update.message.reply_text("❌ Channel setup cancelled and channels cleared.")
     else:
         await update.message.reply_text("ℹ️ No channel setup in progress.")
 
@@ -131,9 +133,8 @@ async def listlinks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not data["single_inputs"]:
         await update.message.reply_text("🔍 No links generated yet.")
         return
-    lines = []
-    for token, info in data["single_inputs"].items():
-        lines.append(f"🔗 [{token} - {info['type']}](https://t.me/{context.bot.username}?start={token})")
+    lines = [f"🔗 [{token} - {info['type']}](https://t.me/{context.bot.username}?start={token})"
+             for token, info in data["single_inputs"].items()]
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 @admin_only
@@ -173,107 +174,139 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text("\n".join(cmds))
 
-# --- Message, Start, and Callback Handlers ---
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
+# --- Message and Token Logic ---
+async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if str(ADMIN_ID) in data["batch_sessions"]:
+        data["batch_sessions"][str(ADMIN_ID)].append(update.message.message_id)
+        save_data()
         return
+    token = generate_token()
+    data["single_inputs"][token] = {"type": "single", "message_id": update.message.message_id}
+    save_data()
+    await update.message.reply_text(f"✅ Link: https://t.me/{context.bot.username}?start={token}")
+
+async def handle_channels_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.user_data.get("awaiting_channels"):
+        return
+    lines = update.message.text.strip().splitlines()
+    new_channels = []
+    for line in lines:
+        if not line.startswith("@"):
+            await update.message.reply_text(f"❌ Invalid username: {line}")
+            return
+        try:
+            chat = await context.bot.get_chat(line)
+            new_channels.append({"username": line, "chat_id": chat.id})
+        except:
+            await update.message.reply_text(f"❌ Bot must be admin in: {line}")
+            return
+    data["required_channels"] = new_channels
+    save_data()
+    context.user_data.clear()
+    await update.message.reply_text("✅ Required channels set.")
+
+async def handle_button_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("awaiting_button_text"):
         context.user_data["button_text"] = update.message.text
-        await update.message.reply_text("🔗 Now send the button URL:")
-        context.user_data.pop("awaiting_button_text")
+        context.user_data["awaiting_button_text"] = False
         context.user_data["awaiting_button_url"] = True
+        await update.message.reply_text("🔗 Now send the button URL:")
     elif context.user_data.get("awaiting_button_url"):
-        data["button_text"] = context.user_data.pop("button_text")
+        context.user_data["awaiting_button_url"] = False
+        data["button_text"] = context.user_data["button_text"]
         data["button_url"] = update.message.text
         context.user_data.clear()
         save_data()
-        await update.message.reply_text("✅ Button text and URL updated.")
-    elif context.user_data.get("awaiting_channels"):
-        channels = update.message.text.splitlines()
-        resolved = []
-        for username in channels:
-            try:
-                chat = await context.bot.get_chat(username.strip())
-                resolved.append({"chat_id": chat.id, "username": username.strip()})
-            except:
-                pass
-        data["required_channels"] = resolved
-        save_data()
-        context.user_data.clear()
-        await update.message.reply_text("✅ Required channels updated.")
-    else:
-        token = generate_token()
-        data["single_inputs"][token] = {
-            "type": "single",
-            "message": {
-                "chat_id": update.effective_chat.id,
-                "message_id": update.message.message_id
-            }
-        }
-        save_data()
-        await update.message.reply_text(f"✅ Link generated: https://t.me/{context.bot.username}?start={token}")
+        await update.message.reply_text("✅ Button updated.")
 
+# --- Start & Delivery ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("❌ Invalid or missing token.")
+    args = context.args
+    if not args:
+        await update.message.reply_text("👋 Hello! You need a valid link token.")
         return
-    token = context.args[0]
-    if token not in data["single_inputs"]:
-        await update.message.reply_text("❌ This link is no longer valid.")
+    token = args[0]
+    payload = data["single_inputs"].get(token)
+    if not payload:
+        await update.message.reply_text("❌ Invalid or expired token.")
         return
-
-    if not await is_user_joined(update.effective_user.id, context):
-        buttons = [[InlineKeyboardButton(ch["username"], url=f"https://t.me/{ch['username'].lstrip('@')}") for ch in data["required_channels"]]]
-        buttons.append([InlineKeyboardButton("✅ Try Again", callback_data=f"tryagain|{token}")])
-        await update.message.reply_text("🚫 Please join all required channels to continue:", reply_markup=InlineKeyboardMarkup(buttons))
+    user_id = update.effective_user.id
+    if not await is_user_joined(user_id, context):
+        buttons = [
+            [InlineKeyboardButton(c["username"], url=f"https://t.me/{c['username'][1:]}")]
+            for c in data["required_channels"]
+        ]
+        buttons.append([InlineKeyboardButton("✅ Try Again", callback_data=f"retry|{token}")])
+        await update.message.reply_text("🚫 Please join all required channels:", reply_markup=InlineKeyboardMarkup(buttons))
         return
+    msg_ids = []
+    if payload["type"] == "single":
+        msg = await context.bot.copy_message(chat_id=user_id, from_chat_id=ADMIN_ID, message_id=payload["message_id"])
+        msg_ids.append(msg.message_id)
+    elif payload["type"] == "batch":
+        for mid in payload["messages"]:
+            msg = await context.bot.copy_message(chat_id=user_id, from_chat_id=ADMIN_ID, message_id=mid)
+            msg_ids.append(msg.message_id)
+    final = await update.message.reply_text(
+        "✅ This will be auto-deleted after 30 min.",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(data["button_text"], url=data["button_url"])]])
+    )
+    msg_ids.append(final.message_id)
+    await schedule_deletion(context, user_id, msg_ids)
 
-    info = data["single_inputs"][token]
-    message_ids = []
-    if info["type"] == "single":
-        sent = await context.bot.copy_message(chat_id=update.effective_chat.id,
-                                              from_chat_id=info["message"]["chat_id"],
-                                              message_id=info["message"]["message_id"])
-        message_ids.append(sent.message_id)
-    elif info["type"] == "batch":
-        for msg in info["messages"]:
-            sent = await context.bot.copy_message(chat_id=update.effective_chat.id,
-                                                  from_chat_id=msg["chat_id"],
-                                                  message_id=msg["message_id"])
-            message_ids.append(sent.message_id)
-
-    footer = await update.message.reply_text("🕒 This will be auto-deleted after 30 min.",
-                                             reply_markup=InlineKeyboardMarkup(
-                                                 [[InlineKeyboardButton(data["button_text"], url=data["button_url"])]])
-                                             )
-    message_ids.append(footer.message_id)
-    asyncio.create_task(schedule_deletion(context, update.effective_chat.id, message_ids))
-
-async def try_again(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def retry_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     token = query.data.split("|")[1]
-    update.message = query.message
-    context.args = [token]
-    await start(update, context)
+    payload = data["single_inputs"].get(token)
+    if not payload:
+        await query.edit_message_text("❌ Invalid or expired token.")
+        return
+    user_id = query.from_user.id
+    if not await is_user_joined(user_id, context):
+        await query.edit_message_text("🚫 You have not joined all required channels.")
+        return
+    msg_ids = []
+    if payload["type"] == "single":
+        msg = await context.bot.copy_message(chat_id=user_id, from_chat_id=ADMIN_ID, message_id=payload["message_id"])
+        msg_ids.append(msg.message_id)
+    elif payload["type"] == "batch":
+        for mid in payload["messages"]:
+            msg = await context.bot.copy_message(chat_id=user_id, from_chat_id=ADMIN_ID, message_id=mid)
+            msg_ids.append(msg.message_id)
+    final = await context.bot.send_message(
+        chat_id=user_id,
+        text="✅ This will be auto-deleted after 30 min.",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(data["button_text"], url=data["button_url"])]])
+    )
+    msg_ids.append(final.message_id)
+    await schedule_deletion(context, user_id, msg_ids)
 
 # --- Main ---
-app = ApplicationBuilder().token(TOKEN).drop_pending_updates(True).build()
+def main():
+    app = ApplicationBuilder().token(TOKEN).drop_pending_updates(True).build()
 
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("batch", batch))
-app.add_handler(CommandHandler("batchoff", batchoff))
-app.add_handler(CommandHandler("generatebatch", generatebatch))
-app.add_handler(CommandHandler("setchannels", setchannels))
-app.add_handler(CommandHandler("cancelsetchannels", cancelsetchannels))
-app.add_handler(CommandHandler("removerequiredchannel", removerequiredchannel))
-app.add_handler(CommandHandler("setbutton", setbutton))
-app.add_handler(CommandHandler("cancelsetbutton", cancelsetbutton))
-app.add_handler(CommandHandler("listlinks", listlinks))
-app.add_handler(CommandHandler("deletelink", deletelink))
-app.add_handler(CommandHandler("deletealllinks", deletealllinks))
-app.add_handler(CommandHandler("allcommands", allcommands))
-app.add_handler(CallbackQueryHandler(try_again))
-app.add_handler(MessageHandler(filters.ALL, handle_message))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("batch", batch))
+    app.add_handler(CommandHandler("generatebatch", generatebatch))
+    app.add_handler(CommandHandler("batchoff", batchoff))
+    app.add_handler(CommandHandler("setchannels", setchannels))
+    app.add_handler(CommandHandler("cancelsetchannels", cancelsetchannels))
+    app.add_handler(CommandHandler("removerequiredchannel", removerequiredchannel))
+    app.add_handler(CommandHandler("setbutton", setbutton))
+    app.add_handler(CommandHandler("cancelsetbutton", cancelsetbutton))
+    app.add_handler(CommandHandler("listlinks", listlinks))
+    app.add_handler(CommandHandler("deletelink", deletelink))
+    app.add_handler(CommandHandler("deletealllinks", deletealllinks))
+    app.add_handler(CommandHandler("allcommands", allcommands))
 
-app.run_polling()
+    app.add_handler(CallbackQueryHandler(retry_handler))
+
+    app.add_handler(MessageHandler(filters.TEXT & filters.USER(ADMIN_ID), handle_admin_input))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.USER(ADMIN_ID), handle_channels_input))
+    app.add_handler(MessageHandler(filters.ALL & filters.USER(ADMIN_ID), handle_button_text))
+
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
