@@ -23,8 +23,7 @@ data = {
     "batch_sessions": {},
     "required_channels": [],
     "button_text": "Open",
-    "button_url": "https://example.com",
-    "promo_text": "\ud83d\udd18 Access Link:"
+    "button_url": "https://example.com"
 }
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r") as f:
@@ -123,15 +122,6 @@ async def cancelsetbutton(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("ℹ️ No button setup in progress.")
 
 @admin_only
-async def promotetext(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.args:
-        data["promo_text"] = " ".join(context.args).strip()
-        save_data()
-        await update.message.reply_text(f"✅ Promo text updated to: {data['promo_text']}")
-    else:
-        await update.message.reply_text("✏️ Usage: /promotext Your new promotional text")
-
-@admin_only
 async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cmds = [
         "/batch - Start batch mode",
@@ -141,7 +131,6 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/cancelsetchannels - Cancel channel setup",
         "/setbutton - Set button text and link",
         "/cancelsetbutton - Cancel button setup",
-        "/promotext - Set promo label text",
         "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
@@ -228,32 +217,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             copied = await context.bot.copy_message(update.effective_chat.id, ADMIN_ID, msg_id)
             sent_ids.append(copied.message_id)
 
-    promo_msg = await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=data.get("promo_text") or ""
-    )
-    sent_ids.append(promo_msg.message_id)
-
-    promo_msg = await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=data.get("promo_text") or ""
-    )
-    sent_ids.append(promo_msg.message_id)
-
-    button_msg = await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=None,
-        reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
-        )
-    )) or "🔘 Access Link:",
+    footer = await update.message.reply_text(
+        "This will be auto-deleted after 30 min",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
     )
-    sent_ids.append(button_msg.message_id)
-
-    footer = await context.bot.send_message(chat_id=update.effective_chat.id, text="This will be auto-deleted after 30 min")
     sent_ids.append(footer.message_id)
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
@@ -285,15 +254,13 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             copied = await context.bot.copy_message(chat_id, ADMIN_ID, msg_id)
             sent_ids.append(copied.message_id)
 
-    button_msg = await context.bot.send_message(
+    footer = await context.bot.send_message(
         chat_id,
+        "This will be auto-deleted after 30 min",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
     )
-    sent_ids.append(button_msg.message_id)
-
-    footer = await context.bot.send_message(chat_id, "This will be auto-deleted after 30 min")
     sent_ids.append(footer.message_id)
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, chat_id, sent_ids))).start()
@@ -315,7 +282,6 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("cancelsetchannels", cancelsetchannels))
     app.add_handler(CommandHandler("setbutton", setbutton))
     app.add_handler(CommandHandler("cancelsetbutton", cancelsetbutton))
-    app.add_handler(CommandHandler("promotext", promotetext))
     app.add_handler(CommandHandler("allcommands", allcommands))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(tryagain_callback, pattern=r"^tryagain|"))
