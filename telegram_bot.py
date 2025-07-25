@@ -228,15 +228,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             copied = await context.bot.copy_message(update.effective_chat.id, ADMIN_ID, msg_id)
             sent_ids.append(copied.message_id)
 
-    button_msg = await update.message.reply_text(
-        data.get("promo_text") or "🔘 Access Link:",
+    button_msg = await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=data.get("promo_text") or "🔘 Access Link:",) or "🔘 Access Link:",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
     )
     sent_ids.append(button_msg.message_id)
 
-    footer = await update.message.reply_text("This will be auto-deleted after 30 min")
+    footer = await context.bot.send_message(chat_id=update.effective_chat.id, text="This will be auto-deleted after 30 min")
     sent_ids.append(footer.message_id)
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
