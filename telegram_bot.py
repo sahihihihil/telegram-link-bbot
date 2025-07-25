@@ -191,4 +191,5 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler(filters.ALL, handle_input))
     app.add_handler(MessageHandler(filters.COMMAND, fallback))
 
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
+
