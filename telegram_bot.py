@@ -307,23 +307,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sent_ids.append(promo.message_id)
 
     button_msg = await update.message.reply_text(
-    "👇 Tap the button below:",
-    reply_markup=InlineKeyboardMarkup(
-        [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
+        "",
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
+        )
     )
-)
-sent_ids.append(button_msg.message_id)
+    sent_ids.append(button_msg.message_id)
 
-notice = await update.message.reply_text(
-    "_This will be auto-deleted after 30 min_",
-    parse_mode="Markdown"
-)
-sent_ids.append(notice.message_id)
+    delete_note = await update.message.reply_text("This will be auto-deleted after 30 min")
+    sent_ids.append(delete_note.message_id)
 
+    threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
 
-
-
-        threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
 # --- Callback Handler for "✅ Try Again" Button ---
 async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -355,26 +350,17 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         promo = await context.bot.send_message(chat_id, data["promo_text"])
         sent_ids.append(promo.message_id)
 
-    footer = await context.bot.send_message(
+    button_msg = await context.bot.send_message(
         chat_id,
-        "This will be auto-deleted after 30 min",
+        "",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
     )
-        button_msg = await update.message.reply_text(
-            "👇 Tap the button below:",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
-            )
-        )
-        sent_ids.append(button_msg.message_id)
+    sent_ids.append(button_msg.message_id)
 
-        notice = await update.message.reply_text(
-            "_This will be auto-deleted after 30 min_",
-            parse_mode="Markdown"
-        )
-        sent_ids.append(notice.message_id)
+    delete_note = await context.bot.send_message(chat_id, "This will be auto-deleted after 30 min")
+    sent_ids.append(delete_note.message_id)
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, chat_id, sent_ids))).start()
     await query.answer()
