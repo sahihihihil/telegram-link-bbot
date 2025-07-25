@@ -54,10 +54,11 @@ def generate_token():
 async def is_user_joined(user_id, context):
     for ch in data["required_channels"]:
         try:
-            chat = await context.bot.get_chat(ch["chat_id"])
-            if chat.type not in ["channel", "supergroup", "group"]:
-                continue
-            member = await context.bot.get_chat_member(chat.id, user_id)
+            chat_id = ch["chat_id"]
+            if isinstance(chat_id, str) and chat_id.startswith("@"):
+                chat = await context.bot.get_chat(chat_id)
+                chat_id = chat.id
+            member = await context.bot.get_chat_member(chat_id, user_id)
             if member.status not in ["member", "administrator", "creator"]:
                 return False
         except:
@@ -80,7 +81,6 @@ async def setjointitle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not args:
         await update.message.reply_text("❌ Usage: /setjointitle <your message>")
         return
-
     data["join_text"] = " ".join(args)
     save_data()
     await update.message.reply_text(f"✅ Join prompt updated to:\n\n{data['join_text']}")
@@ -117,7 +117,7 @@ async def generatebatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @admin_only
 async def setchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📥 Send @channel or group usernames (one per line):")
+    await update.message.reply_text("📥 Send @usernames or numeric IDs (one per line):")
     context.user_data["awaiting_channels"] = True
 
 @admin_only
@@ -158,7 +158,7 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/batchoff - Cancel batch",
         "/setchannels - Set required channels/groups",
         "/cancelsetchannels - Cancel channel setup",
-        "/clearsetchannels - Clear required list",
+        "/clearsetchannels - Clear required channel list",
         "/setbutton - Set button text and link",
         "/cancelsetbutton - Cancel button setup",
         "/promotext - Set or clear promo message",
@@ -177,7 +177,6 @@ async def promotext(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not args:
         await update.message.reply_text("❌ Usage: /promotext <your promo text> or /promotext clear")
         return
-
     if args[0].lower() == "clear":
         data["promo_text"] = ""
         save_data()
@@ -198,7 +197,6 @@ async def listlinks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             messages.append(f"- `{token}` ({type_label})")
     else:
         messages.append("ℹ️ No single or batch links found.")
-
     await update.message.reply_text("\n".join(messages), parse_mode="Markdown")
 
 @admin_only
@@ -207,7 +205,6 @@ async def deletelink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not args:
         await update.message.reply_text("❌ Usage: /deletelink <token>")
         return
-
     token = args[0]
     if token in data["single_inputs"]:
         del data["single_inputs"][token]
@@ -223,7 +220,7 @@ async def deletealllinks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data()
     await update.message.reply_text("🗑️ All links (single & batch) have been deleted.")
 
-# --- Message Input Handler (Admin Only) ---
+# --- Message Input Handler ---
 async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
@@ -231,17 +228,21 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if context.user_data.get("awaiting_channels"):
-        usernames = update.message.text.splitlines()
+        lines = update.message.text.splitlines()
         data["required_channels"] = []
-        for u in usernames:
-            u = u.strip()
-            if u.startswith("@"):
-                data["required_channels"].append({
-                    "chat_id": u,
-                    "url": f"https://t.me/{u[1:]}"
-                })
-        save_data()
+        for line in lines:
+            value = line.strip()
+            if value:
+                try:
+                    chat_id = int(value) if value.lstrip("-").isdigit() else value
+                    data["required_channels"].append({
+                        "chat_id": chat_id,
+                        "url": f"https://t.me/{value[1:]}" if isinstance(chat_id, str) and chat_id.startswith("@") else "Private Group"
+                    })
+                except:
+                    continue
         context.user_data["awaiting_channels"] = False
+        save_data()
         await update.message.reply_text("✅ Required channels/groups updated.")
         return
 
@@ -263,8 +264,7 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if str(ADMIN_ID) in data["batch_sessions"]:
-        msg_id = update.message.message_id
-        data["batch_sessions"][str(ADMIN_ID)].append(msg_id)
+        data["batch_sessions"][str(ADMIN_ID)].append(update.message.message_id)
         save_data()
         return
 
@@ -273,18 +273,16 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data()
     await update.message.reply_text(f"🖓 Link generated: https://t.me/{context.bot.username}?start={token}")
 
-# --- Token-based Delivery (/start <token>) ---
+# --- /start with token handler ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if not args:
         await update.message.reply_text("👋 Welcome!")
         return
-
     token = args[0]
     if token not in data["single_inputs"]:
         await update.message.reply_text("❌ Invalid or expired link.")
         return
-
     if data["required_channels"] and not await is_user_joined(update.effective_user.id, context):
         buttons = [[InlineKeyboardButton("Join", url=ch["url"])] for ch in data["required_channels"]]
         buttons.append([InlineKeyboardButton("✅ Try Again", callback_data=f"tryagain|{token}")])
@@ -298,16 +296,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sent_ids = []
 
     if record["type"] == "single":
-        copied = await context.bot.copy_message(update.effective_chat.id, ADMIN_ID, record["message_id"])
-        sent_ids.append(copied.message_id)
+        msg = await context.bot.copy_message(update.effective_chat.id, ADMIN_ID, record["message_id"])
+        sent_ids.append(msg.message_id)
     else:
         for msg_id in record["messages"]:
-            copied = await context.bot.copy_message(update.effective_chat.id, ADMIN_ID, msg_id)
-            sent_ids.append(copied.message_id)
+            msg = await context.bot.copy_message(update.effective_chat.id, ADMIN_ID, msg_id)
+            sent_ids.append(msg.message_id)
 
     if data.get("promo_text"):
-        promo = await update.message.reply_text(data["promo_text"])
-        sent_ids.append(promo.message_id)
+        msg = await update.message.reply_text(data["promo_text"])
+        sent_ids.append(msg.message_id)
 
     footer = await update.message.reply_text(
         "This will be auto-deleted after 30 min",
@@ -319,7 +317,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
 
-# --- Callback Handler for "✅ Try Again" Button ---
+# --- Callback for "Try Again" ---
 async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     _, token = query.data.split("|")
@@ -339,16 +337,16 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sent_ids = []
 
     if record["type"] == "single":
-        copied = await context.bot.copy_message(chat_id, ADMIN_ID, record["message_id"])
-        sent_ids.append(copied.message_id)
+        msg = await context.bot.copy_message(chat_id, ADMIN_ID, record["message_id"])
+        sent_ids.append(msg.message_id)
     else:
         for msg_id in record["messages"]:
-            copied = await context.bot.copy_message(chat_id, ADMIN_ID, msg_id)
-            sent_ids.append(copied.message_id)
+            msg = await context.bot.copy_message(chat_id, ADMIN_ID, msg_id)
+            sent_ids.append(msg.message_id)
 
     if data.get("promo_text"):
-        promo = await context.bot.send_message(chat_id, data["promo_text"])
-        sent_ids.append(promo.message_id)
+        msg = await context.bot.send_message(chat_id, data["promo_text"])
+        sent_ids.append(msg.message_id)
 
     footer = await context.bot.send_message(
         chat_id,
@@ -363,11 +361,11 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     await query.message.delete()
 
-# --- Fallback for unknown commands ---
+# --- Fallback ---
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❓ Unknown command. Use /allcommands to see available commands.")
 
-# --- Main ---
+# --- Main Entry Point ---
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
 
