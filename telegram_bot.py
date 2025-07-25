@@ -1,13 +1,16 @@
-# telegram_bot.py
 import os
 import json
 import time
 import threading
 import uuid
+import logging
 from functools import wraps
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (ApplicationBuilder, CommandHandler, MessageHandler,
                           filters, CallbackQueryHandler, ContextTypes)
+
+# --- Logging ---
+logging.basicConfig(level=logging.INFO)
 
 # --- Config ---
 TOKEN = os.getenv("BOT_TOKEN")
@@ -15,15 +18,18 @@ ADMIN_ID = int(os.getenv("ADMIN_ID"))
 DATA_FILE = "data.json"
 
 # --- Data Storage ---
-data = {
-    "single_inputs": {},  # token: message dict
-    "batch_sessions": {}, # user_id: [messages]
-    "required_channels": [],
+default_data = {
+    "single_inputs": {},
+    "batch_sessions": {},
+    "required_channels": []
 }
 
-if os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "r") as f:
-        data.update(json.load(f))
+if not os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "w") as f:
+        json.dump(default_data, f)
+
+with open(DATA_FILE, "r") as f:
+    data = json.load(f)
 
 def save_data():
     with open(DATA_FILE, "w") as f:
@@ -62,6 +68,7 @@ def is_user_joined(user_id, context):
     return True
 
 async def schedule_deletion(context: ContextTypes.DEFAULT_TYPE, chat_id, message_ids):
+    import asyncio
     await asyncio.sleep(1800)
     for msg_id in message_ids:
         try:
@@ -192,4 +199,3 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler(filters.COMMAND, fallback))
 
     app.run_polling(drop_pending_updates=True)
-
