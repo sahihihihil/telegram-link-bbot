@@ -319,7 +319,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     sent_ids.append(button_msg.message_id)
 
-    delete_note = await update.message.reply_text("This will be auto-deleted after 30 min")
+    delete_note = await update.message.reply_text("_This will be auto-deleted after 30 min_", parse_mode="Markdown")
     sent_ids.append(delete_note.message_id)
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
@@ -364,7 +364,7 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     sent_ids.append(button_msg.message_id)
 
-    delete_note = await context.bot.send_message(chat_id, "This will be auto-deleted after 30 min")
+    delete_note = await context.bot.send_message(chat_id, "_This will be auto-deleted after 30 min_", parse_mode="Markdown")
     sent_ids.append(delete_note.message_id)
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, chat_id, sent_ids))).start()
