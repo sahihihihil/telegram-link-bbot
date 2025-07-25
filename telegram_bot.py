@@ -54,7 +54,10 @@ def generate_token():
 async def is_user_joined(user_id, context):
     for ch in data["required_channels"]:
         try:
-            member = await context.bot.get_chat_member(ch["chat_id"], user_id)
+            chat = await context.bot.get_chat(ch["chat_id"])
+            if chat.type not in ["channel", "supergroup", "group"]:
+                continue
+            member = await context.bot.get_chat_member(chat.id, user_id)
             if member.status not in ["member", "administrator", "creator"]:
                 return False
         except:
@@ -114,7 +117,7 @@ async def generatebatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @admin_only
 async def setchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📥 Send @channel usernames (one per line):")
+    await update.message.reply_text("📥 Send @channel or group usernames (one per line):")
     context.user_data["awaiting_channels"] = True
 
 @admin_only
@@ -153,9 +156,9 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/batch - Start batch mode",
         "/generatebatch - Generate batch link",
         "/batchoff - Cancel batch",
-        "/setchannels - Set required channels",
+        "/setchannels - Set required channels/groups",
         "/cancelsetchannels - Cancel channel setup",
-        "/clearsetchannels - Clear required channel list",
+        "/clearsetchannels - Clear required list",
         "/setbutton - Set button text and link",
         "/cancelsetbutton - Cancel button setup",
         "/promotext - Set or clear promo message",
@@ -239,7 +242,7 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 })
         save_data()
         context.user_data["awaiting_channels"] = False
-        await update.message.reply_text("✅ Required channels updated.")
+        await update.message.reply_text("✅ Required channels/groups updated.")
         return
 
     if context.user_data.get("awaiting_button_text"):
