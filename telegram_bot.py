@@ -321,7 +321,7 @@ notice = await update.message.reply_text(
 sent_ids.append(notice.message_id)
 
 
-threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
+    threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
 
 # --- Callback Handler for "✅ Try Again" Button ---
 async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -361,7 +361,19 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
     )
-    sent_ids.append(footer.message_id)
+        button_msg = await update.message.reply_text(
+            "👇 Tap the button below:",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
+            )
+        )
+        sent_ids.append(button_msg.message_id)
+
+        notice = await update.message.reply_text(
+            "_This will be auto-deleted after 30 min_",
+            parse_mode="Markdown"
+        )
+        sent_ids.append(notice.message_id)
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, chat_id, sent_ids))).start()
     await query.answer()
