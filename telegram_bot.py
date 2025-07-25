@@ -230,7 +230,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     button_msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text=data.get("promo_text") or "🔘 Access Link:",) or "🔘 Access Link:",
+        text=data.get("promo_text") or "🔘 Access Link:",
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
+        )
+    )) or "🔘 Access Link:",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
