@@ -154,13 +154,13 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if str(ADMIN_ID) in data["batch_sessions"]:
-        msg = update.message.to_dict()
-        data["batch_sessions"][str(ADMIN_ID)].append(msg)
+        msg_id = update.message.message_id
+        data["batch_sessions"][str(ADMIN_ID)].append(msg_id)
         save_data()
         return
 
     token = generate_token()
-    data["single_inputs"][token] = {"type": "single", "message": update.message.to_dict()}
+    data["single_inputs"][token] = {"type": "single", "message_id": update.message.message_id}
     save_data()
     await update.message.reply_text(f"🔗 Link generated: https://t.me/{context.bot.username}?start={token}")
 
@@ -189,12 +189,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sent_ids = []
 
     if record["type"] == "single":
-        msg = await context.bot.send_message(update.effective_chat.id, record["message"].get("text", ""))
-        sent_ids.append(msg.message_id)
+        copied = await context.bot.copy_message(update.effective_chat.id, ADMIN_ID, record["message_id"])
+        sent_ids.append(copied.message_id)
     else:
-        for msg_data in record["messages"]:
-            msg = await context.bot.send_message(update.effective_chat.id, msg_data.get("text", ""))
-            sent_ids.append(msg.message_id)
+        for msg_id in record["messages"]:
+            copied = await context.bot.copy_message(update.effective_chat.id, ADMIN_ID, msg_id)
+            sent_ids.append(copied.message_id)
 
     footer = await update.message.reply_text(
         "This will be auto-deleted after 30 min",
@@ -226,12 +226,12 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sent_ids = []
 
     if record["type"] == "single":
-        msg = await context.bot.send_message(chat_id, record["message"].get("text", ""))
-        sent_ids.append(msg.message_id)
+        copied = await context.bot.copy_message(chat_id, ADMIN_ID, record["message_id"])
+        sent_ids.append(copied.message_id)
     else:
-        for msg_data in record["messages"]:
-            msg = await context.bot.send_message(chat_id, msg_data.get("text", ""))
-            sent_ids.append(msg.message_id)
+        for msg_id in record["messages"]:
+            copied = await context.bot.copy_message(chat_id, ADMIN_ID, msg_id)
+            sent_ids.append(copied.message_id)
 
     footer = await context.bot.send_message(
         chat_id,
