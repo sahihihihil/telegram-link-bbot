@@ -234,6 +234,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     sent_ids.append(promo_msg.message_id)
 
+    promo_msg = await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=data.get("promo_text") or ""
+    )
+    sent_ids.append(promo_msg.message_id)
+
     button_msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text="",
