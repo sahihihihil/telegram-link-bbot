@@ -23,7 +23,8 @@ data = {
     "batch_sessions": {},
     "required_channels": [],
     "button_text": "Open",
-    "button_url": "https://example.com"
+    "button_url": "https://example.com",
+    "promo_text": ""
 }
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r") as f:
@@ -131,9 +132,27 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/cancelsetchannels - Cancel channel setup",
         "/setbutton - Set button text and link",
         "/cancelsetbutton - Cancel button setup",
+        "/promotext - Set or clear promo message",
         "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
+
+@admin_only
+async def promotext(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if not args:
+        await update.message.reply_text("❌ Usage: /promotext <your promo text> or /promotext clear")
+        return
+
+    if args[0].lower() == "clear":
+        data["promo_text"] = ""
+        save_data()
+        await update.message.reply_text("✅ Promo text cleared.")
+    else:
+        text = " ".join(args)
+        data["promo_text"] = text
+        save_data()
+        await update.message.reply_text(f"✅ Promo text set to:\n\n{text}")
 
 # --- Message Input Handler (Admin Only) ---
 async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -217,6 +236,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             copied = await context.bot.copy_message(update.effective_chat.id, ADMIN_ID, msg_id)
             sent_ids.append(copied.message_id)
 
+    if data.get("promo_text"):
+        promo = await update.message.reply_text(data["promo_text"])
+        sent_ids.append(promo.message_id)
+
     footer = await update.message.reply_text(
         "This will be auto-deleted after 30 min",
         reply_markup=InlineKeyboardMarkup(
@@ -254,6 +277,10 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             copied = await context.bot.copy_message(chat_id, ADMIN_ID, msg_id)
             sent_ids.append(copied.message_id)
 
+    if data.get("promo_text"):
+        promo = await context.bot.send_message(chat_id, data["promo_text"])
+        sent_ids.append(promo.message_id)
+
     footer = await context.bot.send_message(
         chat_id,
         "This will be auto-deleted after 30 min",
@@ -282,6 +309,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("cancelsetchannels", cancelsetchannels))
     app.add_handler(CommandHandler("setbutton", setbutton))
     app.add_handler(CommandHandler("cancelsetbutton", cancelsetbutton))
+    app.add_handler(CommandHandler("promotext", promotext))
     app.add_handler(CommandHandler("allcommands", allcommands))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(tryagain_callback, pattern=r"^tryagain|"))
