@@ -140,7 +140,11 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/setbutton - Set button text and link",
         "/cancelsetbutton - Cancel button setup",
         "/promotext - Set or clear promo message",
-        "/allcommands - Show all commands"
+        
+    "/listlinks - List all generated links",
+    "/deletelink <token> - Delete a specific link",
+    "/deletealllinks - Delete all links",
+    "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
 
@@ -160,6 +164,44 @@ async def promotext(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data["promo_text"] = text
         save_data()
         await update.message.reply_text(f"✅ Promo text set to:\n\n{text}")
+
+
+@admin_only
+async def listlinks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not data["single_inputs"]:
+        await update.message.reply_text("ℹ️ No links found.")
+        return
+
+    msg_lines = ["🔗 Active Links:"]
+    for token, info in data["single_inputs"].items():
+        msg_lines.append(f"• `{token}` – {info['type']}")
+
+    await update.message.reply_text("\n".join(msg_lines), parse_mode="Markdown")
+
+@admin_only
+async def deletelink(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if not args:
+        await update.message.reply_text("❌ Usage: /deletelink <token>")
+        return
+
+    token = args[0].strip()
+    if token in data["single_inputs"]:
+        data["single_inputs"].pop(token)
+        save_data()
+        await update.message.reply_text(f"✅ Link `{token}` deleted.", parse_mode="Markdown")
+    else:
+        await update.message.reply_text(f"❌ Token `{token}` not found.", parse_mode="Markdown")
+
+@admin_only
+async def deletealllinks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if args and args[0].lower() == "confirm":
+        data["single_inputs"] = {}
+        save_data()
+        await update.message.reply_text("✅ All links deleted.")
+    else:
+        await update.message.reply_text("⚠️ This will delete *all* links. Use `/deletealllinks confirm` to proceed.", parse_mode="Markdown")
 
 # --- Message Input Handler (Admin Only) ---
 async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -324,4 +366,9 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler(filters.ALL, handle_input))
     app.add_handler(MessageHandler(filters.COMMAND, fallback))
 
-    app.run_polling(drop_pending_updates=True)
+    
+    app.add_handler(CommandHandler("listlinks", listlinks))
+    app.add_handler(CommandHandler("deletelink", deletelink))
+    app.add_handler(CommandHandler("deletealllinks", deletealllinks))
+
+app.run_polling(drop_pending_updates=True)
