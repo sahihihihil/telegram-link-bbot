@@ -100,6 +100,7 @@ async def setchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @admin_only
 async def setbutton(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📝 Send the new button text:")
+    context.user_data.clear()
     context.user_data["awaiting_button_text"] = True
 
 @admin_only
@@ -164,15 +165,15 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "url": f"https://t.me/{u[1:]}"
                 })
         save_data()
-        context.user_data["awaiting_channels"] = False
+        context.user_data.clear()
         await update.message.reply_text("✅ Required channels updated.")
         return
 
     if context.user_data.get("awaiting_button_text"):
         context.user_data["new_button_text"] = update.message.text.strip()
-        await update.message.reply_text("🔗 Now send the new button URL:")
         context.user_data.pop("awaiting_button_text")
         context.user_data["awaiting_button_url"] = True
+        await update.message.reply_text("🔗 Now send the new button URL:")
         return
 
     if context.user_data.get("awaiting_button_url"):
@@ -181,7 +182,7 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data["button_text"] = text
         data["button_url"] = url
         save_data()
-        context.user_data.pop("awaiting_button_url")
+        context.user_data.clear()
         await update.message.reply_text(f"✅ Button updated to: [{text}]({url})", parse_mode="Markdown")
         return
 
@@ -191,6 +192,8 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_data()
         return
 
+    # If no flags set, treat as single input and generate token
+    context.user_data.clear()
     token = generate_token()
     data["single_inputs"][token] = {"type": "single", "message_id": update.message.message_id}
     save_data()
