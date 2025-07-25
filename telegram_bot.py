@@ -5,7 +5,7 @@ import asyncio
 import threading
 import logging
 from functools import wraps
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo, InputMediaDocument
 from telegram.ext import (ApplicationBuilder, CommandHandler, MessageHandler,
                           filters, CallbackQueryHandler, ContextTypes)
 
@@ -85,10 +85,16 @@ async def generatebatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ No inputs in batch.")
         return
     token = generate_token()
-    data["single_inputs"][token] = {"type": "batch", "messages": session}
+    data["single_inputs"][token] = {
+        "type": "batch",
+        "messages": session,
+        "button_text": "Open",
+        "button_url": "https://example.com"
+    }
     data["batch_sessions"].pop(str(ADMIN_ID), None)
     save_data()
-    await update.message.reply_text(f"✅ Batch link generated: https://t.me/{context.bot.username}?start={token}")
+    await update.message.reply_text("✅ Send custom button text or type SKIP:")
+    context.user_data["awaiting_button_text"] = token
 
 @admin_only
 async def setchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -128,6 +134,24 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ Required channels updated.")
         return
 
+    if context.user_data.get("awaiting_button_text"):
+        token = context.user_data.pop("awaiting_button_text")
+        if update.message.text.strip().lower() != "skip":
+            data["single_inputs"][token]["button_text"] = update.message.text.strip()
+            await update.message.reply_text("Now send button URL:")
+            context.user_data["awaiting_button_url"] = token
+        else:
+            save_data()
+            await update.message.reply_text(f"🔗 Link: https://t.me/{context.bot.username}?start={token}")
+        return
+
+    if context.user_data.get("awaiting_button_url"):
+        token = context.user_data.pop("awaiting_button_url")
+        data["single_inputs"][token]["button_url"] = update.message.text.strip()
+        save_data()
+        await update.message.reply_text(f"🔗 Link: https://t.me/{context.bot.username}?start={token}")
+        return
+
     if str(ADMIN_ID) in data["batch_sessions"]:
         msg = update.message.to_dict()
         data["batch_sessions"][str(ADMIN_ID)].append(msg)
@@ -135,9 +159,15 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     token = generate_token()
-    data["single_inputs"][token] = {"type": "single", "message": update.message.to_dict()}
+    data["single_inputs"][token] = {
+        "type": "single",
+        "message": update.message.to_dict(),
+        "button_text": "Open",
+        "button_url": "https://example.com"
+    }
     save_data()
-    await update.message.reply_text(f"🔗 Link generated: https://t.me/{context.bot.username}?start={token}")
+    await update.message.reply_text("✅ Send custom button text or type SKIP:")
+    context.user_data["awaiting_button_text"] = token
 
 # --- Token-based Delivery (/start <token>) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -164,17 +194,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sent_ids = []
 
     if record["type"] == "single":
-        msg = await context.bot.send_message(update.effective_chat.id, record["message"].get("text", ""))
+        msg = await context.bot.copy_message(
+            chat_id=update.effective_chat.id,
+            from_chat_id=ADMIN_ID,
+            message_id=record["message"]["message_id"]
+        )
         sent_ids.append(msg.message_id)
     else:
         for msg_data in record["messages"]:
-            msg = await context.bot.send_message(update.effective_chat.id, msg_data.get("text", ""))
+            msg = await context.bot.copy_message(
+                chat_id=update.effective_chat.id,
+                from_chat_id=ADMIN_ID,
+                message_id=msg_data["message_id"]
+            )
             sent_ids.append(msg.message_id)
 
     footer = await update.message.reply_text(
         "This will be auto-deleted after 30 min",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Open", url="https://example.com")]]
+            [[InlineKeyboardButton(record["button_text"], url=record["button_url"] or "https://example.com")]]
         )
     )
     sent_ids.append(footer.message_id)
@@ -201,18 +239,18 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sent_ids = []
 
     if record["type"] == "single":
-        msg = await context.bot.send_message(chat_id, record["message"].get("text", ""))
+        msg = await context.bot.copy_message(chat_id, ADMIN_ID, record["message"]["message_id"])
         sent_ids.append(msg.message_id)
     else:
         for msg_data in record["messages"]:
-            msg = await context.bot.send_message(chat_id, msg_data.get("text", ""))
+            msg = await context.bot.copy_message(chat_id, ADMIN_ID, msg_data["message_id"])
             sent_ids.append(msg.message_id)
 
     footer = await context.bot.send_message(
         chat_id,
         "This will be auto-deleted after 30 min",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Open", url="https://example.com")]]
+            [[InlineKeyboardButton(record["button_text"], url=record["button_url"] or "https://example.com")]]
         )
     )
     sent_ids.append(footer.message_id)
