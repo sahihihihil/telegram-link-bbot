@@ -185,9 +185,9 @@ async def promotext(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = " ".join(args)
         data["button_caption"] = text
         save_data()
-        await update.message.reply_text(f"✅ Button caption set to:
+        await update.message.reply_text(f"""✅ Button caption set to:
 
-{text}")
+{text}""")
 
 
 @admin_only
