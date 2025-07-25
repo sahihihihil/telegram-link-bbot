@@ -47,10 +47,10 @@ def admin_only(func):
 def generate_token():
     return uuid.uuid4().hex[:8]
 
-def is_user_joined(user_id, context):
+async def is_user_joined(user_id, context):
     for ch in data["required_channels"]:
         try:
-            member = context.bot.get_chat_member(ch["chat_id"], user_id)
+            member = await context.bot.get_chat_member(ch["chat_id"], user_id)
             if member.status not in ["member", "administrator", "creator"]:
                 return False
         except:
@@ -151,7 +151,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Invalid or expired link.")
         return
 
-    if data["required_channels"] and not is_user_joined(update.effective_user.id, context):
+    if data["required_channels"] and not await is_user_joined(update.effective_user.id, context):
         buttons = [[InlineKeyboardButton("Join", url=ch["url"])] for ch in data["required_channels"]]
         buttons.append([InlineKeyboardButton("✅ Try Again", callback_data=f"tryagain|{token}")])
         await update.message.reply_text(
@@ -188,7 +188,7 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     chat_id = query.message.chat.id
 
-    if data["required_channels"] and not is_user_joined(user_id, context):
+    if data["required_channels"] and not await is_user_joined(user_id, context):
         await query.answer("❌ You haven't joined all required channels.", show_alert=True)
         return
 
