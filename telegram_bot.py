@@ -24,7 +24,8 @@ data = {
     "required_channels": [],
     "button_text": "Open",
     "button_url": "https://example.com",
-    "promo_text": ""
+    "promo_text": "",
+    "join_text": "📢 Please join all required channels:"
 }
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r") as f:
@@ -69,6 +70,24 @@ async def schedule_deletion(context: ContextTypes.DEFAULT_TYPE, chat_id, message
             pass
 
 # --- Command Handlers ---
+
+@admin_only
+async def setjointitle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if not args:
+        await update.message.reply_text("❌ Usage: /setjointitle <your message>")
+        return
+
+    data["join_text"] = " ".join(args)
+    save_data()
+    await update.message.reply_text(f"✅ Join prompt updated to:\n\n{data['join_text']}")
+
+@admin_only
+async def resetjointitle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data["join_text"] = "📢 Please join all required channels:"
+    save_data()
+    await update.message.reply_text("🔄 Join prompt reset to default.")
+
 @admin_only
 async def batch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data["batch_sessions"][str(ADMIN_ID)] = []
@@ -143,6 +162,8 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/listlinks - List all active links",
         "/deletelink <token> - Delete a specific link",
         "/deletealllinks - Delete all links",
+        "/setjointitle - Set the join prompt message",
+        "/resetjointitle - Reset join prompt to default",
         "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
@@ -211,7 +232,7 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data["required_channels"] = []
         for u in usernames:
             u = u.strip()
-            if u.startswith("@"):  # valid channel username
+            if u.startswith("@"):
                 data["required_channels"].append({
                     "chat_id": u,
                     "url": f"https://t.me/{u[1:]}"
@@ -265,7 +286,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         buttons = [[InlineKeyboardButton("Join", url=ch["url"])] for ch in data["required_channels"]]
         buttons.append([InlineKeyboardButton("✅ Try Again", callback_data=f"tryagain|{token}")])
         await update.message.reply_text(
-            "📢 Please join all required channels:",
+            data.get("join_text", "📢 Please join all required channels:"),
             reply_markup=InlineKeyboardMarkup(buttons)
         )
         return
@@ -347,6 +368,8 @@ async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
 
+    app.add_handler(CommandHandler("setjointitle", setjointitle))
+    app.add_handler(CommandHandler("resetjointitle", resetjointitle))
     app.add_handler(CommandHandler("batch", batch))
     app.add_handler(CommandHandler("batchoff", batchoff))
     app.add_handler(CommandHandler("generatebatch", generatebatch))
