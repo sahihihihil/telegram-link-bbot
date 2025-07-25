@@ -24,7 +24,7 @@ data = {
     "required_channels": [],
     "button_text": "Open",
     "button_url": "https://example.com",
-    "promo_text": "",
+    "button_caption": "🔘 Tap below to continue",
     "join_text": "📢 Please join all required channels:"
 }
 if os.path.exists(DATA_FILE):
@@ -168,22 +168,26 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text("\n".join(cmds))
 
+
 @admin_only
 async def promotext(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if not args:
-        await update.message.reply_text("❌ Usage: /promotext <your promo text> or /promotext clear")
+        await update.message.reply_text("❌ Usage: /promotext <button caption> or /promotext clear")
         return
 
     if args[0].lower() == "clear":
-        data["promo_text"] = ""
+        data["button_caption"] = "🔘 Tap below to continue"
         save_data()
-        await update.message.reply_text("✅ Promo text cleared.")
+        await update.message.reply_text("✅ Button caption reset to default.")
     else:
         text = " ".join(args)
-        data["promo_text"] = text
+        data["button_caption"] = text
         save_data()
-        await update.message.reply_text(f"✅ Promo text set to:\n\n{text}")
+        await update.message.reply_text(f"✅ Button caption set to:
+
+{text}")
+
 
 @admin_only
 async def listlinks(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -307,7 +311,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sent_ids.append(promo.message_id)
 
     button_msg = await update.message.reply_text(
-        "🔘 Tap below to continue:",
+        data.get("button_caption", "🔘 Tap below to continue"),
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
@@ -352,7 +356,7 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     button_msg = await context.bot.send_message(
         chat_id,
-        "🔘 Tap below to continue:",
+        data.get("button_caption", "🔘 Tap below to continue"),
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
