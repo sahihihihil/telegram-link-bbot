@@ -1,8 +1,8 @@
 import os
 import json
-import time
-import threading
 import uuid
+import asyncio
+import threading
 import logging
 from functools import wraps
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -17,19 +17,18 @@ TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 DATA_FILE = "data.json"
 
-# --- Data Storage ---
-default_data = {
+# --- Load or initialize data ---
+data = {
     "single_inputs": {},
     "batch_sessions": {},
     "required_channels": []
 }
-
-if not os.path.exists(DATA_FILE):
+if os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "r") as f:
+        data.update(json.load(f))
+else:
     with open(DATA_FILE, "w") as f:
-        json.dump(default_data, f)
-
-with open(DATA_FILE, "r") as f:
-    data = json.load(f)
+        json.dump(data, f)
 
 def save_data():
     with open(DATA_FILE, "w") as f:
@@ -48,17 +47,9 @@ def admin_only(func):
 def generate_token():
     return uuid.uuid4().hex[:8]
 
-async def send_required_channel_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE, token):
-    buttons = [[InlineKeyboardButton("Join", url=ch)] for ch in data["required_channels"]]
-    buttons.append([InlineKeyboardButton("✅ Try Again", callback_data=f"tryagain|{token}")])
-    await update.message.reply_text(
-        "📢 Please join all required channels before proceeding:",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
-
 def is_user_joined(user_id, context):
-    for ch_url in data["required_channels"]:
-        chat_id = ch_url.split("/")[-1]
+    for ch in data["required_channels"]:
+        chat_id = ch.split("/")[-1]
         try:
             member = context.bot.get_chat_member(chat_id, user_id)
             if member.status not in ["member", "administrator", "creator"]:
@@ -68,7 +59,6 @@ def is_user_joined(user_id, context):
     return True
 
 async def schedule_deletion(context: ContextTypes.DEFAULT_TYPE, chat_id, message_ids):
-    import asyncio
     await asyncio.sleep(1800)
     for msg_id in message_ids:
         try:
@@ -117,8 +107,13 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text("\n".join(cmds))
 
-# --- Input Handler ---
+# --- Message Input Handler (Admin Only) ---
 async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ You are not authorized to use this bot.")
+        return
+
     if context.user_data.get("awaiting_channels"):
         links = update.message.text.splitlines()
         data["required_channels"] = [link.strip() for link in links if link.strip()]
@@ -138,7 +133,7 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data()
     await update.message.reply_text(f"🔗 Link generated: https://t.me/{context.bot.username}?start={token}")
 
-# --- /start <token> handler ---
+# --- Token-based Delivery (/start <token>) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if not args:
@@ -152,14 +147,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data["required_channels"]:
         if not is_user_joined(update.effective_user.id, context):
-            await send_required_channel_prompt(update, context, token)
+            buttons = [[InlineKeyboardButton("Join", url=ch)] for ch in data["required_channels"]]
+            buttons.append([InlineKeyboardButton("✅ Try Again", callback_data=f"tryagain|{token}")])
+            await update.message.reply_text(
+                "📢 Please join all required channels:",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
             return
 
     record = data["single_inputs"][token]
     sent_ids = []
 
     if record["type"] == "single":
-        msg = await context.bot.send_message(update.effective_chat.id, record["message"]["text"])
+        msg = await context.bot.send_message(update.effective_chat.id, record["message"].get("text", ""))
         sent_ids.append(msg.message_id)
     else:
         for msg_data in record["messages"]:
@@ -173,19 +173,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     )
     sent_ids.append(footer.message_id)
+
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
 
+# --- Callback Handler for "✅ Try Again" Button ---
 async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     _, token = query.data.split("|")
     await start(update, context)
     await query.answer()
 
+# --- Fallback for unknown commands ---
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❓ Unknown command. Use /allcommands to see available commands.")
 
+# --- Main ---
 if __name__ == '__main__':
-    import asyncio
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("batch", batch))
