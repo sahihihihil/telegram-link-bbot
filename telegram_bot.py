@@ -285,12 +285,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         promo = await update.message.reply_text(data["promo_text"])
         sent_ids.append(promo.message_id)
 
-    footer = await update.message.reply_text(
-        "This will be auto-deleted after 30 min",
+    button_msg = await update.message.reply_text(
+        "",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
     )
+    sent_ids.append(button_msg.message_id)
+
+    footer = await update.message.reply_text("This will be auto-deleted after 30 min")
     sent_ids.append(footer.message_id)
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
@@ -326,13 +329,16 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         promo = await context.bot.send_message(chat_id, data["promo_text"])
         sent_ids.append(promo.message_id)
 
-    footer = await context.bot.send_message(
+    button_msg = await context.bot.send_message(
         chat_id,
-        "This will be auto-deleted after 30 min",
+        "",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
     )
+    sent_ids.append(button_msg.message_id)
+
+    footer = await context.bot.send_message(chat_id, "This will be auto-deleted after 30 min")
     sent_ids.append(footer.message_id)
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, chat_id, sent_ids))).start()
