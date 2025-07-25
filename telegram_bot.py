@@ -21,7 +21,9 @@ DATA_FILE = "data.json"
 data = {
     "single_inputs": {},
     "batch_sessions": {},
-    "required_channels": []
+    "required_channels": [],
+    "button_text": "Open",
+    "button_url": "https://example.com"
 }
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r") as f:
@@ -96,12 +98,18 @@ async def setchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["awaiting_channels"] = True
 
 @admin_only
+async def setbutton(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("📝 Send the new button text:")
+    context.user_data["awaiting_button_text"] = True
+
+@admin_only
 async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cmds = [
         "/batch - Start batch mode",
         "/generatebatch - Generate batch link",
         "/batchoff - Cancel batch",
         "/setchannels - Set required channels",
+        "/setbutton - Set button text and link",
         "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
@@ -126,6 +134,23 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_data()
         context.user_data["awaiting_channels"] = False
         await update.message.reply_text("✅ Required channels updated.")
+        return
+
+    if context.user_data.get("awaiting_button_text"):
+        context.user_data["new_button_text"] = update.message.text.strip()
+        await update.message.reply_text("🔗 Now send the new button URL:")
+        context.user_data.pop("awaiting_button_text")
+        context.user_data["awaiting_button_url"] = True
+        return
+
+    if context.user_data.get("awaiting_button_url"):
+        url = update.message.text.strip()
+        text = context.user_data.pop("new_button_text")
+        data["button_text"] = text
+        data["button_url"] = url
+        save_data()
+        context.user_data.pop("awaiting_button_url")
+        await update.message.reply_text(f"✅ Button updated to: [{text}]({url})", parse_mode="Markdown")
         return
 
     if str(ADMIN_ID) in data["batch_sessions"]:
@@ -174,7 +199,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     footer = await update.message.reply_text(
         "This will be auto-deleted after 30 min",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Open", url="https://example.com")]]
+            [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
     )
     sent_ids.append(footer.message_id)
@@ -212,7 +237,7 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id,
         "This will be auto-deleted after 30 min",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Open", url="https://example.com")]]
+            [[InlineKeyboardButton(data["button_text"], url=data["button_url"] or "https://example.com")]]
         )
     )
     sent_ids.append(footer.message_id)
@@ -233,6 +258,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("batchoff", batchoff))
     app.add_handler(CommandHandler("generatebatch", generatebatch))
     app.add_handler(CommandHandler("setchannels", setchannels))
+    app.add_handler(CommandHandler("setbutton", setbutton))
     app.add_handler(CommandHandler("allcommands", allcommands))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(tryagain_callback, pattern=r"^tryagain|"))
