@@ -205,6 +205,9 @@ async def deletealllinks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Message Input Handler (Admin Only) ---
 async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text and update.message.text.startswith("/"):
+        return  # Ignore commands, let CommandHandler handle them
+
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         await update.message.reply_text("❌ You are not authorized to use this bot.")
