@@ -143,7 +143,7 @@ async def cancelsetchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def clearsetchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data["required_channels"] = []
     save_data()
-    await update.message.reply_text("✅ Required channel list has been cleared.")
+    await update.message.reply_text("✅ Required channel/Group list has been cleared.")
 
 @admin_only
 async def setbutton(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -167,7 +167,7 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/batch - Start batch mode",
         "/generatebatch - Generate batch link",
         "/batchoff - Cancel batch",
-        "/setchannels - Set required channels",
+        "/setchannels - Set required channels/Groups",
         "/cancelsetchannels - Cancel channel setup",
         "/clearsetchannels - Clear required channel list",
         "/setbutton - Set button text and link",
@@ -308,7 +308,7 @@ async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     token = generate_token()
     data["single_inputs"][token] = {"type": "single", "message_id": update.message.message_id}
     save_data()
-    await update.message.reply_text(f"🖓 Link generated: https://t.me/{context.bot.username}?start={token}")
+    await update.message.reply_text(f"🔗 Link generated: https://t.me/{context.bot.username}?start={token}")
 
 # --- Token-based Delivery (/start <token>) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
