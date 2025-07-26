@@ -405,7 +405,7 @@ async def showconfig(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🔘 *Button:*
 • Text: {data.get("button_text", "N/A")}
 • URL: {data.get("button_url", "N/A")}
-• Caption: {data.get("button_caption", "N/A")}
+• Promo text: {data.get("button_caption", "N/A")}
 
 🕒 *Auto-delete time:* {data.get("auto_delete_time", 1800)} seconds ({data.get("auto_delete_time", 1800)//60} minutes)
 
