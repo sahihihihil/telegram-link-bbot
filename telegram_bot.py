@@ -354,7 +354,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     delete_note = delete_time = data.get("delete_time", 1800)
     time_text = format_seconds(delete_time)
-    await update.message.reply_text(chat_id if "start" == "tryagain_callback" else update.effective_chat.id, f"_This will be auto-deleted after {time_text}_", parse_mode="Markdown")
+    delete_note = await update.message.reply_text(f"_This will be auto-deleted after {time_text}_", parse_mode="Markdown")
+    sent_ids.append(delete_note.message_id)
     sent_ids.append(delete_note.message_id)
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
@@ -401,7 +402,8 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     delete_note = delete_time = data.get("delete_time", 1800)
     time_text = format_seconds(delete_time)
-    await context.bot.send_message(chat_id if "tryagain_callback" == "tryagain_callback" else update.effective_chat.id, f"_This will be auto-deleted after {time_text}_", parse_mode="Markdown")
+    delete_note = await context.bot.send_message(chat_id, f"_This will be auto-deleted after {time_text}_", parse_mode="Markdown")
+    sent_ids.append(delete_note.message_id)
     sent_ids.append(delete_note.message_id)
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, chat_id, sent_ids))).start()
