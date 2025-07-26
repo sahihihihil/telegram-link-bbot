@@ -179,7 +179,6 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/setjointitle - Set the join prompt message",
         "/resetjointitle - Reset join prompt to default",
         "/settime <seconds> - Set auto-delete time in seconds",
-        "/showconfig - Show current bot configuration",
         "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
@@ -223,35 +222,6 @@ async def promotext(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 {text}""")
 
-
-
-@admin_only
-async def showconfig(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    join_text = data.get("join_text", "📢 Please join all required channels:")
-    channels = data.get("required_channels", [])
-    button_text = data.get("button_text", "Open")
-    button_url = data.get("button_url", "https://example.com")
-    button_caption = data.get("button_caption", "🔘 Tap below to continue")
-    delete_time = data.get("delete_time", 1800)
-    single_links = len(data.get("single_inputs", {}))
-    batch_sessions = len(data.get("batch_sessions", {}))
-
-    channel_list = "\n".join(f"- {ch['chat_id']}" for ch in channels) or "_None_"
-    delete_time_str = format_seconds(delete_time)
-
-    msg = (
-        "⚙️ *Current Bot Configuration:*\n\n"
-        f"📌 *Join Text:*\n\"{join_text}\"\n\n"
-        f"📢 *Required Channels:*\n{channel_list}\n\n"
-        f"🔘 *Button Text:*\n\"{button_text}\"\n\n"
-        f"🔗 *Button URL:*\n\"{button_url}\"\n\n"
-        f"✏️ *Button Caption:*\n\"{button_caption}\"\n\n"
-        f"🕒 *Auto-delete Time:*\n{delete_time_str}\n\n"
-        f"📥 *Saved Links:*\n"
-        f"- Single: {single_links}\n"
-        f"- Batch Sessions: {batch_sessions}"
-    )
-    await update.message.reply_text(msg, parse_mode="Markdown")
 
 @admin_only
 async def listlinks(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -462,7 +432,6 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("listlinks", listlinks))
     app.add_handler(CommandHandler("deletelink", deletelink))
     app.add_handler(CommandHandler("deletealllinks", deletealllinks))
-    app.add_handler(CommandHandler("showconfig", showconfig))
     app.add_handler(CommandHandler("allcommands", allcommands))
     app.add_handler(CommandHandler("settime", settime))
     app.add_handler(CommandHandler("start", start))
