@@ -179,6 +179,7 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/setjointitle - Set the join prompt message",
         "/resetjointitle - Reset join prompt to default",
         "/settime <seconds> - Set auto-delete time in seconds",
+        "/showconfig - Show current bot configuration",
         "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
