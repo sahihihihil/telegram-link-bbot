@@ -358,7 +358,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sent_ids.append(delete_note.message_id)
     sent_ids.append(delete_note.message_id)
 
-    threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
+    context.application.create_task(schedule_deletion(context, update.effective_chat.id, sent_ids))
 
 # --- Callback Handler for "✅ Try Again" Button ---
 async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -406,7 +406,7 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sent_ids.append(delete_note.message_id)
     sent_ids.append(delete_note.message_id)
 
-    threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, chat_id, sent_ids))).start()
+    context.application.create_task(schedule_deletion(context, chat_id, sent_ids))
     await query.answer()
     await query.message.delete()
 
