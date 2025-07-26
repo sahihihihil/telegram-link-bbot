@@ -179,11 +179,48 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/setjointitle - Set the join prompt message",
         "/resetjointitle - Reset join prompt to default",
         "/settime <seconds> - Set auto-delete time in seconds",
+        "/showconfig - Show current bot configuration",  # ✅ Added this line
+        "/allcommands - Show all commands"
         "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
 
 
+
+
+
+@admin_only
+async def showconfig(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    channel_list = "\n".join(
+        f"- [{ch['chat_id']}]({ch['url']})" for ch in data.get("required_channels", [])
+    ) or "❌ No channels set."
+
+    config_text = f"""⚙️ *Current Bot Configuration:*
+
+📌 *Join Text:* 
+`{data.get("join_text", "Not set")}`
+
+📢 *Required Channels:* 
+{channel_list}
+
+🔘 *Button Text:* 
+`{data.get("button_text", "Not set")}`
+
+🔗 *Button URL:* 
+`{data.get("button_url", "Not set")}`
+
+✏️ *Button Caption:* 
+`{data.get("button_caption", "Not set")}`
+
+🕒 *Auto-delete Time:* 
+`{format_seconds(data.get("delete_time", 1800))}`
+
+📥 *Saved Links:* 
+- Single: {len(data.get("single_inputs", {}))}
+- Batch Sessions: {len(data.get("batch_sessions", {}))}
+"""
+
+    await update.message.reply_text(config_text, parse_mode="Markdown", disable_web_page_preview=True)
 
 
 @admin_only
@@ -432,6 +469,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("listlinks", listlinks))
     app.add_handler(CommandHandler("deletelink", deletelink))
     app.add_handler(CommandHandler("deletealllinks", deletealllinks))
+    app.add_handler(CommandHandler("showconfig", showconfig))
     app.add_handler(CommandHandler("allcommands", allcommands))
     app.add_handler(CommandHandler("settime", settime))
     app.add_handler(CommandHandler("start", start))
