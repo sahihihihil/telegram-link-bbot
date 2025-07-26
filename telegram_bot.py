@@ -393,7 +393,30 @@ async def setautodeletetime(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @admin_only
 async def showconfig(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    channel_list = "\n".join(
+    def escape_md(text):
+        return text.replace("*", "\*").replace("_", "\_").replace("[", "\[").replace("`", "\`")
+
+    channel_list = "
+".join(
+        f"- {escape_md(ch['chat_id'])}" for ch in data.get("required_channels", [])
+    ) or "None"
+
+    msg = f"""🔧 *Current Bot Configuration:*
+
+📍 *Join Prompt:*
+{escape_md(data.get("join_text", "N/A"))}
+
+🔘 *Button:*
+• Text: {escape_md(data.get("button_text", "N/A"))}
+• URL: {escape_md(data.get("button_url", "N/A"))}
+• Caption: {escape_md(data.get("button_caption", "N/A"))}
+
+🕒 *Auto-delete time:* {data.get("auto_delete_time", 1800)} seconds ({data.get("auto_delete_time", 1800)//60} minutes)
+
+📢 *Required Channels:*
+{channel_list}
+"""
+    await update.message.reply_text(msg, parse_mode="Markdown")
         f"- {ch['chat_id']}" for ch in data.get("required_channels", [])
     ) or "None"
 
