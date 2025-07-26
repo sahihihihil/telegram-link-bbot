@@ -178,7 +178,7 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/deletealllinks - Delete all links",
         "/setjointitle - Set the join prompt message",
         "/resetjointitle - Reset join prompt to default",
-        "/config - Show current bot configuration",
+        "/settime <seconds> - Set auto-delete time in seconds",
         "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
@@ -352,7 +352,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     sent_ids.append(button_msg.message_id)
 
-    delete_time = data.get("delete_time", 1800)
+    delete_note = delete_time = data.get("delete_time", 1800)
     time_text = format_seconds(delete_time)
     delete_note = await update.message.reply_text(f"_This will be auto-deleted after {time_text}_", parse_mode="Markdown")
     sent_ids.append(delete_note.message_id)
@@ -400,7 +400,7 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     sent_ids.append(button_msg.message_id)
 
-    delete_time = data.get("delete_time", 1800)
+    delete_note = delete_time = data.get("delete_time", 1800)
     time_text = format_seconds(delete_time)
     delete_note = await context.bot.send_message(chat_id, f"_This will be auto-deleted after {time_text}_", parse_mode="Markdown")
     sent_ids.append(delete_note.message_id)
@@ -411,26 +411,6 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.delete()
 
 # --- Fallback for unknown commands ---
-
-@admin_only
-async def config(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    delete_time = data.get("delete_time", 1800)
-    time_text = format_seconds(delete_time)
-
-    channel_list = data.get("required_channels", [])
-    channels = "\n  • " + "\n  • ".join(ch["chat_id"] for ch in channel_list) if channel_list else " None"
-
-    message = f"""🛠 *Bot Configuration*:
-- *Join Text:* {data.get("join_text")}
-- *Button Text:* {data.get("button_text")}
-- *Button URL:* {data.get("button_url")}
-- *Button Caption:* {data.get("button_caption")}
-- *Delete Time:* {time_text}
-- *Required Channels:*{channels}
-"""
-    await update.message.reply_text(message, parse_mode="Markdown")
-
-
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❓ Unknown command. Use /allcommands to see available commands.")
 
@@ -453,7 +433,6 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("deletelink", deletelink))
     app.add_handler(CommandHandler("deletealllinks", deletealllinks))
     app.add_handler(CommandHandler("allcommands", allcommands))
-    app.add_handler(CommandHandler("config", config))
     app.add_handler(CommandHandler("settime", settime))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(tryagain_callback, pattern=r"^tryagain|"))
