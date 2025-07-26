@@ -394,6 +394,12 @@ async def setautodeletetime(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @admin_only
 async def showconfig(update: Update, context: ContextTypes.DEFAULT_TYPE):
     def escape_md(text):
+    # Use raw strings to avoid invalid escape sequences
+    replacements = [("*", "\\*"), ("_", "\\_"), ("[", "\\["), ("]", "\\]"), ("(", "\\("), (")", "\\)"), ("`", "\\`")]
+    for old, new in replacements:
+        text = text.replace(old, new)
+    return text
+
         return text.replace("*", "\*").replace("_", "\_").replace("[", "\[").replace("`", "\`")
 
     channel_list = "
