@@ -260,6 +260,8 @@ async def deletealllinks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Message Input Handler (Admin Only) ---
 async def handle_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private":
+        return
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         await update.message.reply_text("❌ You are not authorized to use this bot.")
@@ -362,6 +364,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Callback Handler for "✅ Try Again" Button ---
 async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private":
+        await update.callback_query.answer("❌ Not available in group/channel chats.", show_alert=True)
+        return
     query = update.callback_query
     _, token = query.data.split("|")
     user_id = query.from_user.id
@@ -412,6 +417,8 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Fallback for unknown commands ---
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private":
+        return
     await update.message.reply_text("❓ Unknown command. Use /allcommands to see available commands.")
 
 # --- Main ---
@@ -436,7 +443,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("settime", settime))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(tryagain_callback, pattern=r"^tryagain|"))
-    app.add_handler(MessageHandler(filters.ALL, handle_input))
-    app.add_handler(MessageHandler(filters.COMMAND, fallback))
+    app.add_handler(MessageHandler(filters.ChatType.PRIVATE, handle_input))
+    app.add_handler(MessageHandler(filters.ChatType.PRIVATE & filters.COMMAND, fallback))
 
     app.run_polling(drop_pending_updates=True)
