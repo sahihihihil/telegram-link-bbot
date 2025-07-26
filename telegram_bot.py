@@ -128,7 +128,7 @@ async def generatebatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @admin_only
 async def setchannels(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📥 Send @channel usernames (one per line):")
+    await update.message.reply_text("📥 Send channel/Group usernames (one per line):")
     context.user_data["awaiting_channels"] = True
 
 @admin_only
