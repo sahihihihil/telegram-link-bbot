@@ -25,8 +25,7 @@ data = {
     "button_text": "Open",
     "button_url": "https://example.com",
     "button_caption": "🔘 Tap below to continue",
-    "join_text": "📢 Please join all required channels:",
-    "auto_delete_time": 1800
+    "join_text": "📢 Please join all required channels:"
 }
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r") as f:
@@ -49,6 +48,20 @@ def admin_only(func):
         return await func(update, context)
     return wrapper
 
+
+def format_seconds(seconds: int) -> str:
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    parts = []
+    if hours:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if minutes:
+        parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    if secs:
+        parts.append(f"{secs} second{'s' if secs != 1 else ''}")
+    return " ".join(parts) if parts else "0 seconds"
+
 def generate_token():
     return uuid.uuid4().hex[:8]
 
@@ -63,7 +76,7 @@ async def is_user_joined(user_id, context):
     return True
 
 async def schedule_deletion(context: ContextTypes.DEFAULT_TYPE, chat_id, message_ids):
-    await asyncio.sleep(data.get("auto_delete_time", 1800))
+    await asyncio.sleep(data.get("delete_time", 1800))
     for msg_id in message_ids:
         try:
             await context.bot.delete_message(chat_id, msg_id)
@@ -165,12 +178,29 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/deletealllinks - Delete all links",
         "/setjointitle - Set the join prompt message",
         "/resetjointitle - Reset join prompt to default",
-        "/setautodeletetime <seconds> - Set message auto-delete time",
-        "/showconfig - View current bot configuration",
+        "/settime <seconds> - Set auto-delete time in seconds",
         "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
 
+
+
+
+@admin_only
+async def settime(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if not args or not args[0].isdigit():
+        await update.message.reply_text("❌ Usage: /settime <seconds>\nExample: `/settime 600`", parse_mode="Markdown")
+        return
+
+    seconds = int(args[0])
+    if seconds < 30:
+        await update.message.reply_text("⚠️ Auto-delete time must be at least 30 seconds.")
+        return
+
+    data["delete_time"] = seconds
+    save_data()
+    await update.message.reply_text(f"⏱️ Auto-delete time set to {format_seconds(seconds)}.")
 
 
 @admin_only
@@ -322,7 +352,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     sent_ids.append(button_msg.message_id)
 
-    delete_note = await update.message.reply_text("_This will be auto-deleted after 30 min_", parse_mode="Markdown")
+    delete_note = delete_time = data.get("delete_time", 1800)
+    time_text = format_seconds(delete_time)
+    await update.message.reply_text(chat_id if "start" == "tryagain_callback" else update.effective_chat.id, f"_This will be auto-deleted after {time_text}_", parse_mode="Markdown")
     sent_ids.append(delete_note.message_id)
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, update.effective_chat.id, sent_ids))).start()
@@ -367,82 +399,14 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     sent_ids.append(button_msg.message_id)
 
-    delete_note = await context.bot.send_message(chat_id, "_This will be auto-deleted after 30 min_", parse_mode="Markdown")
+    delete_note = delete_time = data.get("delete_time", 1800)
+    time_text = format_seconds(delete_time)
+    await context.bot.send_message(chat_id if "tryagain_callback" == "tryagain_callback" else update.effective_chat.id, f"_This will be auto-deleted after {time_text}_", parse_mode="Markdown")
     sent_ids.append(delete_note.message_id)
 
     threading.Thread(target=lambda: asyncio.run(schedule_deletion(context, chat_id, sent_ids))).start()
     await query.answer()
     await query.message.delete()
-
-
-@admin_only
-async def setautodeletetime(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    if not args or not args[0].isdigit():
-        await update.message.reply_text("❌ Usage: /setautodeletetime <seconds>")
-        return
-
-    seconds = int(args[0])
-    if seconds < 30 or seconds > 86400:
-        await update.message.reply_text("⚠️ Please provide a time between 30 and 86400 seconds (24 hours).")
-        return
-
-    data["auto_delete_time"] = seconds
-    save_data()
-    await update.message.reply_text(f"✅ Auto-delete time set to {seconds} seconds ({seconds // 60} minutes).")
-
-@admin_only
-async def showconfig(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    def escape_md(text):
-    # Use raw strings to avoid invalid escape sequences
-    replacements = [("*", "\\*"), ("_", "\\_"), ("[", "\\["), ("]", "\\]"), ("(", "\\("), (")", "\\)"), ("`", "\\`")]
-    for old, new in replacements:
-        text = text.replace(old, new)
-    return text
-
-        return text.replace("*", "\*").replace("_", "\_").replace("[", "\[").replace("`", "\`")
-
-    channel_list = "
-".join(
-        f"- {escape_md(ch['chat_id'])}" for ch in data.get("required_channels", [])
-    ) or "None"
-
-    msg = f"""🔧 *Current Bot Configuration:*
-
-📍 *Join Prompt:*
-{escape_md(data.get("join_text", "N/A"))}
-
-🔘 *Button:*
-• Text: {escape_md(data.get("button_text", "N/A"))}
-• URL: {escape_md(data.get("button_url", "N/A"))}
-• Caption: {escape_md(data.get("button_caption", "N/A"))}
-
-🕒 *Auto-delete time:* {data.get("auto_delete_time", 1800)} seconds ({data.get("auto_delete_time", 1800)//60} minutes)
-
-📢 *Required Channels:*
-{channel_list}
-"""
-    await update.message.reply_text(msg, parse_mode="Markdown")
-        f"- {ch['chat_id']}" for ch in data.get("required_channels", [])
-    ) or "None"
-
-    msg = f"""🔧 *Current Bot Configuration:*
-
-📍 *Join Prompt:*
-{data.get("join_text", "N/A")}
-
-🔘 *Button:*
-• Text: {data.get("button_text", "N/A")}
-• URL: {data.get("button_url", "N/A")}
-• Caption: {data.get("button_caption", "N/A")}
-
-🕒 *Auto-delete time:* {data.get("auto_delete_time", 1800)} seconds ({data.get("auto_delete_time", 1800)//60} minutes)
-
-📢 *Required Channels:*
-{channel_list}
-"""
-    await update.message.reply_text(msg, parse_mode="Markdown")
-
 
 # --- Fallback for unknown commands ---
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -467,11 +431,10 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("deletelink", deletelink))
     app.add_handler(CommandHandler("deletealllinks", deletealllinks))
     app.add_handler(CommandHandler("allcommands", allcommands))
-    app.add_handler(CommandHandler("setautodeletetime", setautodeletetime))
-    app.add_handler(CommandHandler("showconfig", showconfig))
+    app.add_handler(CommandHandler("settime", settime))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(tryagain_callback, pattern=r"^tryagain|"))
     app.add_handler(MessageHandler(filters.ALL, handle_input))
-
     app.add_handler(MessageHandler(filters.COMMAND, fallback))
+
     app.run_polling(drop_pending_updates=True)
