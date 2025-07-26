@@ -25,7 +25,8 @@ data = {
     "button_text": "Open",
     "button_url": "https://example.com",
     "button_caption": "🔘 Tap below to continue",
-    "join_text": "📢 Please join all required channels:"
+    "join_text": "📢 Please join all required channels:",
+    "auto_delete_time": 1800
 }
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r") as f:
@@ -62,7 +63,7 @@ async def is_user_joined(user_id, context):
     return True
 
 async def schedule_deletion(context: ContextTypes.DEFAULT_TYPE, chat_id, message_ids):
-    await asyncio.sleep(1800)
+    await asyncio.sleep(data.get("auto_delete_time", 1800))
     for msg_id in message_ids:
         try:
             await context.bot.delete_message(chat_id, msg_id)
@@ -164,6 +165,8 @@ async def allcommands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/deletealllinks - Delete all links",
         "/setjointitle - Set the join prompt message",
         "/resetjointitle - Reset join prompt to default",
+        "/setautodeletetime <seconds> - Set message auto-delete time",
+        "/showconfig - View current bot configuration",
         "/allcommands - Show all commands"
     ]
     await update.message.reply_text("\n".join(cmds))
@@ -371,6 +374,47 @@ async def tryagain_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     await query.message.delete()
 
+
+@admin_only
+async def setautodeletetime(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if not args or not args[0].isdigit():
+        await update.message.reply_text("❌ Usage: /setautodeletetime <seconds>")
+        return
+
+    seconds = int(args[0])
+    if seconds < 30 or seconds > 86400:
+        await update.message.reply_text("⚠️ Please provide a time between 30 and 86400 seconds (24 hours).")
+        return
+
+    data["auto_delete_time"] = seconds
+    save_data()
+    await update.message.reply_text(f"✅ Auto-delete time set to {seconds} seconds ({seconds // 60} minutes).")
+
+@admin_only
+async def showconfig(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    channel_list = "\n".join(
+        f"- {ch['chat_id']}" for ch in data.get("required_channels", [])
+    ) or "None"
+
+    msg = f"""🔧 *Current Bot Configuration:*
+
+📍 *Join Prompt:*
+{data.get("join_text", "N/A")}
+
+🔘 *Button:*
+• Text: {data.get("button_text", "N/A")}
+• URL: {data.get("button_url", "N/A")}
+• Caption: {data.get("button_caption", "N/A")}
+
+🕒 *Auto-delete time:* {data.get("auto_delete_time", 1800)} seconds ({data.get("auto_delete_time", 1800)//60} minutes)
+
+📢 *Required Channels:*
+{channel_list}
+"""
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+
 # --- Fallback for unknown commands ---
 async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❓ Unknown command. Use /allcommands to see available commands.")
@@ -394,6 +438,8 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("deletelink", deletelink))
     app.add_handler(CommandHandler("deletealllinks", deletealllinks))
     app.add_handler(CommandHandler("allcommands", allcommands))
+    app.add_handler(CommandHandler("setautodeletetime", setautodeletetime))
+    app.add_handler(CommandHandler("showconfig", showconfig))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(tryagain_callback, pattern=r"^tryagain|"))
     app.add_handler(MessageHandler(filters.ALL, handle_input))
